@@ -3,38 +3,41 @@ from connector import Client, Store
 from datetime import datetime
 from time import sleep
 
+
 class _Sniper:
     def __init__(self):
         self._client = Client()
         self._store = Store()
-        self._body = \
-        {
+        self._body = {
             'summonerName': None,
-            'accountId': self._get_account_id(),
-            'items': [{'inventoryType': 'SUMMONER_CUSTOMIZATION', 'itemId': 1, 'ipCost': 13900, 'rpCost': None, 'quantity': 1}]
+            'accountId': self._client.call('GET', '/lol-login/v1/session').json()['accountId'],
+            'items': [
+                {
+                        'inventoryType': 'SUMMONER_CUSTOMIZATION',
+                        'itemId': 1,
+                        'ipCost': 13900,
+                        'rpCost': None,
+                        'quantity': 1
+                }
+            ]
         }
-
-    def _get_account_id(self):
-        return self._client.call('GET', '/lol-login/v1/session').json()['accountId']
 
     def _change_name(self):
         return self._store.call('POST', '/summonerNameChange/purchase', self._body)
 
+
 class Caitlyn(_Sniper):
-    def __init__(self, key, name):
+    def __init__(self, key=None):
         super().__init__()
         self._key = key
-        self._body['summonerName'] = name
 
-    def snipe(self):
-        checker = Checker(self._key, self._get_server())
-        name_availability_datetime = checker.get_name_availability_datetime(self._body['summonerName'])
-        print(f'Sleeping for {name_availability_datetime - datetime.now()}, until {name_availability_datetime}')
-        sleep((name_availability_datetime - datetime.now()).total_seconds() - 0.4)
-        for i in range(1, 6):
-            print(f'Try {i} of 5', datetime.now())
+    def snipe_name(self, name):
+        self._body['summonerName'] = name
+        checker = Checker(self._get_server(), self._key)
+        name_availability = checker.get_name_availability(name)
+        sleep((name_availability - datetime.now()).total_seconds() - 0.4)
+        for i in range(5):
             if self._change_name().status_code == 200:
-                print('Success', datetime.now())
                 return True
             sleep(0.1)
         return False
@@ -42,14 +45,14 @@ class Caitlyn(_Sniper):
     def _get_server(self):
         return self._client.call('GET', '/riotclient/get_region_locale').json()['region']
 
-class Aphelios(_Sniper):
-    def __init__(self, names):
-        super().__init__()
-        self._names = names
 
-    def snipe(self):
+class Aphelios(_Sniper):
+    def __init__(self):
+        super().__init__()
+
+    def snipe_name(self, names):
         while True:
-            for name in self._names:
+            for name in names:
                 if self._check_name_availability(name):
                     self._body['summonerName'] = name
                     return self._change_name()
